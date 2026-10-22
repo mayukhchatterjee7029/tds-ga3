@@ -5,7 +5,7 @@ from openai import OpenAI
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
-MODEL = os.getenv("LLM_MODEL", "google/gemma-4-31b-it:free")
+MODEL = os.getenv("LLM_MODEL", "minimax/minimax-m3.1-flash:free")
 client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=os.getenv("OPENROUTER_API_KEY", "unset"), timeout=30, max_retries=1)
 MAX_STEPS = 6
 LOCK = threading.Lock()
