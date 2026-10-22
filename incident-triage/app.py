@@ -9,7 +9,10 @@ MODEL = os.getenv("LLM_MODEL", "google/gemma-4-31b-it:free")
 client = OpenAI(base_url="https://openrouter.ai/api/v1", api_key=os.getenv("OPENROUTER_API_KEY", "unset"), timeout=30, max_retries=1)
 MAX_STEPS = 6
 LOCK = threading.Lock()
-C = sqlite3.connect(os.getenv("DB_PATH", "incidents.db"), check_same_thread=False); C.row_factory = sqlite3.Row
+DB = os.getenv("DB_PATH", "incidents.db")
+try: os.makedirs(os.path.dirname(os.path.abspath(DB)), exist_ok=True); open(DB, "a").close()
+except OSError: DB = "/tmp/incidents.db"
+C = sqlite3.connect(DB, check_same_thread=False); C.row_factory = sqlite3.Row
 C.executescript("""
 CREATE TABLE IF NOT EXISTS incidents(id TEXT PRIMARY KEY, created TEXT, request TEXT, status TEXT, cause TEXT, action TEXT, action_result TEXT);
 CREATE TABLE IF NOT EXISTS events(incident_id TEXT, seq INT, ts TEXT, kind TEXT, name TEXT, ok INT, duration_ms REAL, detail TEXT, prev TEXT, hash TEXT);
