@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: invoice-agent
+    runtime: docker
+    plan: free
+    healthCheckPath: /health
+    envVars:
+      - key: PUBLIC_BASE_URL
+        sync: false
+      - key: DB_PATH
+        value: /var/data/invoice_agent.sqlite3
