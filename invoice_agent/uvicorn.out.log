@@ -1,0 +1,7 @@
+INFO:     127.0.0.1:64230 - "GET /healthz HTTP/1.1" 200 OK
+INFO:     2405:201:9018:c85b:7251:7bb4:9354:edbf:0 - "POST /a2a/message%3Asend HTTP/1.1" 200 OK
+INFO:     2405:201:9018:c85b:7251:7bb4:9354:edbf:0 - "GET /a2a HTTP/1.1" 405 Method Not Allowed
+INFO:     2405:201:9018:c85b:7251:7bb4:9354:edbf:0 - "GET /a2a HTTP/1.1" 405 Method Not Allowed
+INFO:     2405:201:9018:c85b:7251:7bb4:9354:edbf:0 - "GET /a2a/message%3Asend HTTP/1.1" 405 Method Not Allowed
+INFO:     2405:201:9018:c85b:7251:7bb4:9354:edbf:0 - "GET /a2a/message%3Asend HTTP/1.1" 405 Method Not Allowed
+INFO:     2405:201:9018:c85b:7251:7bb4:9354:edbf:0 - "GET /.well-known/agent-card.json HTTP/1.1" 200 OK
