@@ -166,7 +166,7 @@ def health(): return {"ok":True,"name":APP_NAME}
 
 @app.get("/.well-known/agent-card.json")
 def agent_card():
-    return {"name":APP_NAME,"description":"Reconciles invoice, PO, goods received note, supplier email and credit notes. Produces evidence-cited decisions, enforces explicit approval and avoids repeating recorded actions.","url":os.getenv("PUBLIC_BASE_URL","").rstrip("/")+"/a2a",
+    return {"name":APP_NAME,"description":"Reconciles invoice, PO, goods received note, supplier email and credit notes. Produces evidence-cited decisions, enforces explicit approval and avoids repeating recorded actions.","url":os.getenv("PUBLIC_BASE_URL","").rstrip("/")+"/a2a/message:send",
       "version":"1.0.0","capabilities":{"streaming":False,"pushNotifications":False},"defaultInputModes":["text","application/json"],"defaultOutputModes":["text","application/json"],"skills":[{"id":"invoice-reconciliation","name":"Invoice reconciliation","description":"Reconcile invoice packages and return recommended action with evidence."}]}
 
 @app.post("/check")
@@ -226,6 +226,7 @@ def save(req: SaveRequest):
         return result
 
 @app.post("/a2a")
+@app.post("/a2a/message:send")
 def a2a(body: dict[str, Any]):
     """Minimal JSON-RPC A2A compatibility endpoint for message/send."""
     method=body.get("method")

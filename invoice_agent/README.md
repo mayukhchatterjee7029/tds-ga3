@@ -2,7 +2,7 @@
 
 ## What is included
 - FastAPI HTTP service with HTTPS-ready hosting via Render/Railway/Fly/etc.
-- A2A Agent Card at `/.well-known/agent-card.json` and a minimal JSON-RPC endpoint at `/a2a`.
+- A2A Agent Card at `/.well-known/agent-card.json` and JSON-RPC endpoints at `/a2a` and `/a2a/message:send`.
 - `/check` endpoint to reconcile structured invoice packages and cite document fields.
 - `/save` endpoint with persistent SQLite task/action records and idempotency key.
 - Fail-closed payment behavior: no payment is simulated and no fake receipt is produced.
