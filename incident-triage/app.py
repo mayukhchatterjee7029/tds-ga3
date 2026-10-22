@@ -102,9 +102,11 @@ def run(iid, req):
             set_(iid, cause=cause, action=n, action_result=res, status="resolved" if res["executed"] else "action_failed"); return
     set_(iid, status="no_action")
 
+@app.get("/v2/health")
 @app.get("/health")
 def health(): return {"status": "ok"}
 
+@app.post("/v2/incidents")
 @app.post("/incidents")
 def create(body: Incident):
     req = body.model_dump(); iid = req["id"] or "inc_" + uuid.uuid4().hex[:10]; req["id"] = iid
@@ -115,6 +117,7 @@ def create(body: Incident):
     run(iid, req)
     return get(iid)
 
+@app.get("/v2/incidents/{iid}")
 @app.get("/incidents/{iid}")
 def get(iid: str):
     r = C.execute("SELECT * FROM incidents WHERE id=?", (iid,)).fetchone()
@@ -122,6 +125,7 @@ def get(iid: str):
     j = lambda s: json.loads(s) if s else None
     return {"id": iid, "created": r["created"], "status": r["status"], "cause": r["cause"], "action": r["action"], "action_result": j(r["action_result"]), "request": j(r["request"])}
 
+@app.get("/v2/incidents/{iid}/telemetry")
 @app.get("/incidents/{iid}/telemetry")
 def telemetry(iid: str):
     rows = C.execute("SELECT * FROM events WHERE incident_id=? ORDER BY seq", (iid,)).fetchall()
