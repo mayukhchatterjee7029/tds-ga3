@@ -1,8 +1,11 @@
-import os, json, time, sqlite3, uuid, hashlib, datetime, threading
+import os, re, sys, json, time, sqlite3, uuid, hashlib, datetime, threading
 from typing import Optional
 import httpx
 from openai import OpenAI
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
+from fastapi.responses import JSONResponse
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from pydantic import BaseModel
 
 MODEL = os.getenv("LLM_MODEL", "minimax/minimax-m3.1-flash:free")
@@ -18,6 +21,20 @@ CREATE TABLE IF NOT EXISTS incidents(id TEXT PRIMARY KEY, created TEXT, request 
 CREATE TABLE IF NOT EXISTS events(incident_id TEXT, seq INT, ts TEXT, kind TEXT, name TEXT, ok INT, duration_ms REAL, detail TEXT, prev TEXT, hash TEXT);
 """)
 app = FastAPI(title="Incident Agent")
+SECRET_KEY = re.compile(r"(token|secret|passw|api[-_]?key|authorization|credential|cookie|private[-_]?key|ssn|card[-_]?num)", re.I)
+def _card(m):
+    d = [int(c) for c in m.group(0)[::-1]]
+    return "[REDACTED]" if (sum(d[0::2]) + sum(sum(divmod(2 * x, 10)) for x in d[1::2])) % 10 == 0 else m.group(0)
+SECRET_VAL = [re.compile(r"(?i)bearer\s+[A-Za-z0-9._~+/=-]+"), re.compile(r"\bsk-[A-Za-z0-9_-]{8,}"),
+              re.compile(r"\b\d{3}-\d{2}-\d{4}\b"), re.compile(r"[\w.+-]+@[\w-]+\.[\w.-]+"),
+              re.compile(r"(?i)(password|passwd|secret|token|api[_-]?key)\s*[=:]\s*\S+")]
+def redact(x):
+    if isinstance(x, dict): return {k: "[REDACTED]" if SECRET_KEY.search(str(k)) and not str(k).lower().endswith("tokens") else redact(v) for k, v in x.items()}
+    if isinstance(x, list): return [redact(v) for v in x]
+    if isinstance(x, str):
+        for p in SECRET_VAL: x = p.sub("[REDACTED]", x)
+        x = re.sub(r"\b\d{13,19}\b", _card, x)
+    return x
 now = lambda: datetime.datetime.utcnow().isoformat() + "Z"
 
 class Diag(BaseModel): name: str; description: str = ""; url: str; method: str = "GET"
@@ -34,13 +51,13 @@ def emit(iid, kind, name, ok, dur, detail):
     with LOCK:
         last = C.execute("SELECT seq,hash FROM events WHERE incident_id=? ORDER BY seq DESC LIMIT 1", (iid,)).fetchone()
         seq, prev = (last["seq"] + 1, last["hash"]) if last else (1, "")
-        ts, d = now(), json.dumps(detail, sort_keys=True)
+        ts, d = now(), json.dumps(redact(detail), sort_keys=True)
         C.execute("INSERT INTO events VALUES(?,?,?,?,?,?,?,?,?,?)", (iid, seq, ts, kind, name, int(ok), round(dur, 2), d, prev, digest(prev, seq, ts, kind, name, int(ok), d)))
         C.commit()
 
 def set_(iid, **kw):
     with LOCK:
-        for k, v in kw.items(): C.execute(f"UPDATE incidents SET {k}=? WHERE id=?", (v if isinstance(v, str) or v is None else json.dumps(v), iid))
+        for k, v in kw.items(): C.execute(f"UPDATE incidents SET {k}=? WHERE id=?", (redact(v) if isinstance(v, str) or v is None else json.dumps(redact(v)), iid))
         C.commit()
 
 SYSTEM = """You are an incident-response agent. Reply with ONE JSON object, no prose.
@@ -52,6 +69,7 @@ Never invent evidence. Use only the names provided."""
 
 def ask(iid, req, results):
     ran = {r["name"] for r in results}
+    req = redact(req)
     user = {"title": req["title"], "description": req["description"], "service": req["service"],
             "available_diagnostics": [{"name": d["name"], "description": d["description"]} for d in req["diagnostics"] if d["name"] not in ran],
             "diagnostic_results": results,
@@ -112,7 +130,8 @@ def create(body: Incident):
     req = body.model_dump(); iid = req["id"] or "inc_" + uuid.uuid4().hex[:10]; req["id"] = iid
     with LOCK:
         if C.execute("SELECT 1 FROM incidents WHERE id=?", (iid,)).fetchone(): return get(iid)
-        C.execute("INSERT INTO incidents(id,created,request,status) VALUES(?,?,?,?)", (iid, now(), json.dumps(req), "investigating")); C.commit()
+        C.execute("INSERT INTO incidents(id,created,request,status) VALUES(?,?,?,?)", (iid, now(), json.dumps(redact(req)), "investigating")); C.commit()
+    print(f"[incident] {iid} request={json.dumps(redact(req))[:1500]}", file=sys.stderr, flush=True)
     emit(iid, "incident", "opened", True, 0, {"title": req["title"]})
     run(iid, req)
     return get(iid)
@@ -141,3 +160,9 @@ def telemetry(iid: str):
             "counts": {"diagnostics": n("diagnostic"), "actions": n("action"), "overrides": n("override"), "rejected": n("rejected"), "llm_calls": n("llm")},
             "diagnostics_run": [e["name"] for e in ev if e["kind"] == "diagnostic"], "actions_executed": [e["name"] for e in ev if e["kind"] == "action"],
             "tokens": {"prompt": tok("prompt_tokens"), "completion": tok("completion_tokens"), "total": tok("total_tokens")}}
+
+
+@app.exception_handler(RequestValidationError)
+async def on_invalid(request: Request, exc: RequestValidationError):
+    print(f"[invalid] {request.method} {request.url.path} errors={json.dumps(redact(jsonable_encoder(exc.errors())))[:1500]}", file=sys.stderr, flush=True)
+    return JSONResponse(status_code=422, content={"detail": redact(jsonable_encoder(exc.errors()))})
